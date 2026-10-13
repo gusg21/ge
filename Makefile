@@ -8,7 +8,7 @@ ge: $(objects)
 # In the case of the first target, foo.o, the target-pattern matches foo.o and sets the "stem" to be "foo".
 # It then replaces the '%' in prereq-patterns with that stem
 $(objects): %.o: %.c
-	$(CC) -c $^ -o $@
+	$(CC) -c $^ -o $@ -Werror -g
 
 clean:
 	rm -f ge
