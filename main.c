@@ -217,6 +217,11 @@ void surface_get_cursor_display_pos(struct surface* surf, int* line, int* col) {
     *col = clamped_col + SURF_PAD;
 }
 
+void surface_clamp_cursor_to_line(struct surface* surf) {
+    int cur_line_len = strnlen(buffer_get_line(&surf->buf, surf->cur.line), MAX_LINE_LENGTH);
+    surf->cur.col = CLAMP(surf->cur.col, 0, cur_line_len);
+}
+
 void error_line_init() {
     memcpy(g_error_line, INITIAL_ERROR_LINE_TEXT, sizeof(INITIAL_ERROR_LINE_TEXT));
 
@@ -261,11 +266,13 @@ void move_down() {
 void move_left() {
     g_active_surf.cur.col--;
     surface_validate_state(&g_active_surf);
+    surface_clamp_cursor_to_line(&g_active_surf);
 }
 
 void move_right() {
     g_active_surf.cur.col++;
     surface_validate_state(&g_active_surf);
+    surface_clamp_cursor_to_line(&g_active_surf);
 }
 
 /* Type a character into the current surface. */
@@ -286,7 +293,15 @@ void insert_char(char c) {
 }
 
 void backspace() {
-
+    if (g_active_surf.cur.col == 0) {
+        return;
+    }
+    char* current_line = buffer_get_line(&g_active_surf.buf, g_active_surf.cur.line);
+    
+    char* cursor = current_line + g_active_surf.cur.col;
+    memcpy(cursor - 1, cursor, MAX_LINE_LENGTH - g_active_surf.cur.col - 1);
+    
+    move_left();
 }
 
 struct ge_args {
@@ -352,7 +367,10 @@ int main(int argc, char* argv[]) {
             move_left();
         } else if (c == KEY_RIGHT) {
             move_right();
+        } else if (c == 0177) {
+            backspace();
         }
+        error_line_printf("%o", c);
     }
 
     return 0;
