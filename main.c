@@ -7,12 +7,18 @@
 #define STR(x) #x
 #define XSTR(x) STR(x)
 #define CTRL(x) ((x) & 0x1f)
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define CLAMP(value, min, max) MIN(max, MAX(min, value))
 
 #define GE_VERSION "0.1"
 #define MAX_LINE_LENGTH 1024
 #define MAX_ERROR_LINE_LENGTH 1024
 #define INITIAL_ERROR_LINE_TEXT "GE v" GE_VERSION
 #define SURF_PAD 1
+
+#define SURFACE_BORDER_COLOR_INDEX 1
+#define SURFACE_TEXT_COLOR_INDEX 2
 
 struct buffer_node {
     char text[MAX_LINE_LENGTH];
@@ -35,7 +41,7 @@ struct surface {
     int first_line;    /* Which line number is visible at the top of the surface (scroll) */
 };
 
-static struct surface g_cur_surf = { 0 };
+static struct surface g_active_surf = { 0 };
 static char g_error_line[MAX_ERROR_LINE_LENGTH] = { 0 };
 static WINDOW* g_error_line_win = NULL;
 
@@ -46,17 +52,14 @@ static void setup() {
     keypad(stdscr, true); /* Enable all keys */
     nonl();               /* Suppress newline */
 
-    if (has_colors()) {
-        start_color();
+    start_color();
 
-        init_pair(1, COLOR_RED, COLOR_BLACK);
-        init_pair(2, COLOR_GREEN, COLOR_BLACK);
-        init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-        init_pair(4, COLOR_BLUE, COLOR_BLACK);
-        init_pair(5, COLOR_CYAN, COLOR_BLACK);
-        init_pair(6, COLOR_MAGENTA, COLOR_BLACK);
-        init_pair(7, COLOR_WHITE, COLOR_BLACK);
+    for (int i = 0; i < 256; i++) {
+        init_pair(i, i, COLOR_BLACK);
     }
+
+    init_color(SURFACE_BORDER_COLOR_INDEX, 200, 200, 1000);
+    init_color(SURFACE_TEXT_COLOR_INDEX, 1000, 1000, 1000);
 }
 
 void buffer_init(struct buffer* buf) {
@@ -149,27 +152,21 @@ void buffer_from_file(struct buffer* buf, FILE* file) {
 
     while (c != EOF) {
         if (c == '\n') {
-            size_t length = line_ptr - line;
+            int length = line_ptr - line;
 
             struct buffer_node* new_line = buffer_add_line(buf);
 
             memcpy(new_line->text, line, length);
-
-            memset(line, 0, MAX_LINE_LENGTH);
             line_ptr = line;
+            memset(line, 0, MAX_LINE_LENGTH);
 
-            /* Eat the new line */
-            while (c == '\n') {
-                c = fgetc(file);
-                if (c == '\n') {
-                    buffer_add_line(buf);
-                }
-            }
+            c = fgetc(file);
+        } else {
+            *line_ptr = c;
+            line_ptr++;
+
+            c = fgetc(file);
         }
-
-        *line_ptr = c;
-        line_ptr++;
-        c = fgetc(file);
     }
 }
 
@@ -188,17 +185,36 @@ void surface_init(struct surface* surf) {
     surf->cur.line = 0;
 }
 
+int surface_get_line_count(struct surface* surf) { return getmaxy(surf->win) - SURF_PAD - SURF_PAD; }
+
 void surface_repaint(struct surface* surf) {
     werase(surf->win);
+
+    wattron(surf->win, COLOR_PAIR(1));
     box(surf->win, 0, 0);
 
     /* Render lines */
-    int line_ct = getmaxy(surf->win) - SURF_PAD - SURF_PAD;
+    int line_ct = surface_get_line_count(surf);
     int first_line = surf->first_line;
     for (int i = 0; i < line_ct; i++) {
+        wattron(surf->win, COLOR_PAIR(2));
         mvwaddstr(surf->win, i + SURF_PAD, SURF_PAD, buffer_get_line(&surf->buf, first_line + i));
     }
     wrefresh(surf->win);
+    mvwprintw(surf->win, 0, getmaxx(surf->win) - 10, "%d", surface_get_line_count(surf));
+}
+
+void surface_validate_state(struct surface* surf) {
+    surf->cur.line = CLAMP(surf->cur.line, 0, buffer_count_lines(&surf->buf));
+    surf->first_line = CLAMP(surf->first_line, 0, buffer_count_lines(&surf->buf));
+}
+
+void surface_get_cursor_display_pos(struct surface* surf, int* line, int* col) {
+    int cur_line_len = strnlen(buffer_get_line(&surf->buf, surf->cur.line), MAX_LINE_LENGTH);
+    int clamped_col = CLAMP(surf->cur.col, 0, cur_line_len);
+
+    *line = surf->cur.line - g_active_surf.first_line + SURF_PAD;
+    *col = clamped_col + SURF_PAD;
 }
 
 void error_line_init() {
@@ -226,10 +242,51 @@ void error_line_printf(const char* fmt, ...) {
     va_end(args);
 }
 
+void move_up() {
+    if (g_active_surf.cur.line <= g_active_surf.first_line) {
+        g_active_surf.first_line -= 1;
+    }
+    g_active_surf.cur.line--;
+    surface_validate_state(&g_active_surf);
+}
+
+void move_down() {
+    if (g_active_surf.cur.line + 1 >= g_active_surf.first_line + surface_get_line_count(&g_active_surf)) {
+        g_active_surf.first_line += 1;
+    }
+    g_active_surf.cur.line++;
+    surface_validate_state(&g_active_surf);
+}
+
+void move_left() {
+    g_active_surf.cur.col--;
+    surface_validate_state(&g_active_surf);
+}
+
+void move_right() {
+    g_active_surf.cur.col++;
+    surface_validate_state(&g_active_surf);
+}
+
 /* Type a character into the current surface. */
-void type_char(char c) {
-    buffer_set_char(&g_cur_surf.buf, g_cur_surf.cur.line, g_cur_surf.cur.col, c);
-    g_cur_surf.cur.col++;
+void replace_char(char c) {
+    buffer_set_char(&g_active_surf.buf, g_active_surf.cur.line, g_active_surf.cur.col, c);
+    
+    move_right();
+}
+
+void insert_char(char c) {
+    char* current_line = buffer_get_line(&g_active_surf.buf, g_active_surf.cur.line);
+
+    char* cursor = current_line + g_active_surf.cur.col;
+    memcpy(cursor + 1, cursor, MAX_LINE_LENGTH - g_active_surf.cur.col - 1);
+    *cursor = c;
+
+    move_right();
+}
+
+void backspace() {
+
 }
 
 struct ge_args {
@@ -251,10 +308,13 @@ struct ge_args parse_args(int argc, char* argv[]) {
 }
 
 int main(int argc, char* argv[]) {
+    // FILE* file = fopen(".gitignore", "r");
+    // buffer_from_file(&g_cur_surf.buf, file);
+
     setup();
 
     /* Surface init */
-    surface_init(&g_cur_surf);
+    surface_init(&g_active_surf);
 
     /* Error line init */
     error_line_init();
@@ -268,24 +328,30 @@ int main(int argc, char* argv[]) {
         error_line_printf("Failed to read from %s.", args.filename);
     } else {
         error_line_printf("Read from %s.", args.filename);
-        buffer_from_file(&g_cur_surf.buf, file);
+        buffer_from_file(&g_active_surf.buf, file);
     }
 
     for (;;) {
-        surface_repaint(&g_cur_surf);
-        wrefresh(g_cur_surf.win);
+        surface_repaint(&g_active_surf);
+        wrefresh(g_active_surf.win);
 
         error_line_repaint();
 
-        int padding = 1;
-        wmove(g_cur_surf.win, g_cur_surf.cur.line + padding, g_cur_surf.cur.col + padding);
+        int line, col;
+        surface_get_cursor_display_pos(&g_active_surf, &line, &col);
+        wmove(g_active_surf.win, line, col);
 
-        char c = wgetch(g_cur_surf.win); /* refresh, accept single keystroke of input */
+        int c = wgetch(g_active_surf.win); /* refresh, accept single keystroke of input */
         if (isprint(c)) {
-            type_char(c);
-        } else if (KEY_DOWN) {
-            g_cur_surf.first_line++;
-            error_line_printf("%d", g_cur_surf.first_line);
+            insert_char(c);
+        } else if (c == KEY_DOWN) {
+            move_down();
+        } else if (c == KEY_UP) {
+            move_up();
+        } else if (c == KEY_LEFT) {
+            move_left();
+        } else if (c == KEY_RIGHT) {
+            move_right();
         }
     }
 
