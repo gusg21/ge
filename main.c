@@ -231,6 +231,9 @@ void surface_repaint(struct surface* surf) {
                 } else {
                     /* Beginning of multi-line selection */
                     start_col = surf->sel.start_col;
+                    if (surf->sel.start_line > surf->sel.end_line) {
+                        start_col = surf->sel.end_col;
+                    }
                     end_col = MAX_LINE_LENGTH;
                 }
 
@@ -251,6 +254,9 @@ void surface_repaint(struct surface* surf) {
             else if (line_idx == end_line) {
                 /* End of a multi-line selection */
                 int end_col = surf->sel.end_col;
+                if (surf->sel.start_line > surf->sel.end_line) {
+                    end_col = surf->sel.start_col;
+                }
 
                 char substr[MAX_LINE_LENGTH] = { 0 };
                 int selection_length = end_col;
@@ -367,11 +373,13 @@ void backspace() {
 
 void clear_selection() { g_active_surf.sel.enabled = false; }
 
-void reset_selection() {
-    g_active_surf.sel.start_line = g_active_surf.cur.line;
-    g_active_surf.sel.end_line = g_active_surf.cur.line;
-    g_active_surf.sel.start_col = g_active_surf.cur.col;
-    g_active_surf.sel.end_col = g_active_surf.cur.col;
+void try_start_selection() {
+    if (!g_active_surf.sel.enabled) {
+        g_active_surf.sel.start_line = g_active_surf.cur.line;
+        g_active_surf.sel.start_col = g_active_surf.cur.col;
+    }
+
+    g_active_surf.sel.enabled = true;
 }
 
 void validate_selection() {
@@ -380,52 +388,15 @@ void validate_selection() {
     g_active_surf.sel.start_line = CLAMP(g_active_surf.sel.start_line, 0, line_ct);
     g_active_surf.sel.end_line = CLAMP(g_active_surf.sel.end_line, 0, line_ct);
 
-    int start_len = strlen(buffer_get_line(buf, g_active_surf.sel.start_line));
-    g_active_surf.sel.start_col = CLAMP(g_active_surf.sel.start_col, 0, start_len);
-    int end_len = strlen(buffer_get_line(buf, g_active_surf.sel.end_line));
-    g_active_surf.sel.end_col = CLAMP(g_active_surf.sel.end_col, 0, end_len);
+    /* We are intentionally not clamping the selection to the line lengths to allow selections traveling over shorter
+     * lines to be unaffected */
+    g_active_surf.sel.start_col = MAX(g_active_surf.sel.start_col, 0);
+    g_active_surf.sel.end_col = MAX(g_active_surf.sel.end_col, 0);
 }
 
-void select_right() {
-    if (!g_active_surf.sel.enabled) {
-        g_active_surf.sel.enabled = true;
-
-        reset_selection();
-    }
-
-    g_active_surf.sel.end_col++;
-}
-
-void select_left() {
-    if (!g_active_surf.sel.enabled) {
-        g_active_surf.sel.enabled = true;
-
-        reset_selection();
-    }
-
-    g_active_surf.sel.end_col--;
-}
-
-void select_down() {
-    if (!g_active_surf.sel.enabled) {
-        g_active_surf.sel.enabled = true;
-
-        reset_selection();
-    }
-
-    g_active_surf.sel.end_line++;
-    validate_selection();
-
-}
-
-void select_up() {
-    if (!g_active_surf.sel.enabled) {
-        g_active_surf.sel.enabled = true;
-
-        reset_selection();
-    }
-
-    g_active_surf.sel.end_line--;
+void select_to_cursor() {
+    g_active_surf.sel.end_col = g_active_surf.cur.col;
+    g_active_surf.sel.end_line = g_active_surf.cur.line;
     validate_selection();
 }
 
@@ -501,17 +472,21 @@ int main(int argc, char* argv[]) {
         }
 
         else if (c == KEY_SRIGHT) {
-            select_right();
+            try_start_selection();
             move_right();
+            select_to_cursor();
         } else if (c == KEY_SLEFT) {
-            select_left();
+            try_start_selection();
             move_left();
+            select_to_cursor();
         } else if (c == 0520) { /* shift+down */
-            select_down();
+            try_start_selection();
             move_down();
+            select_to_cursor();
         } else if (c == 0521) { /* shift+up */
-            select_up();
+            try_start_selection();
             move_up();
+            select_to_cursor();
         }
 
         else if (c == 0177) { /* backspace */
