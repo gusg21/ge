@@ -2,7 +2,7 @@ src = main.c
 objects = $(patsubst %.c,%.o,$(src))
 
 ge: $(objects)
-	$(CC) $^ -o ge -lncurses
+	$(CC) $^ -o ge -lncurses -lm
 
 # Syntax - targets ...: target-pattern: prereq-patterns ...
 # In the case of the first target, foo.o, the target-pattern matches foo.o and sets the "stem" to be "foo".
