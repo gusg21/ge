@@ -17,8 +17,9 @@
 #define INITIAL_ERROR_LINE_TEXT "GE v" GE_VERSION
 #define SURF_PAD 1
 
-#define SURFACE_BORDER_COLOR_INDEX 1
-#define SURFACE_TEXT_COLOR_INDEX 2
+#define SURFACE_BORDER_CIDX 1
+#define SURFACE_TEXT_CIDX 2
+#define SURFACE_TEXT_SELECTED_CIDX 3
 
 struct buffer_node {
     char text[MAX_LINE_LENGTH];
@@ -34,11 +35,20 @@ struct cursor {
     int line;
 };
 
+struct selection {
+    int start_col;
+    int start_line;
+    int end_col;
+    int end_line;
+    bool enabled;
+};
+
 struct surface {
-    struct buffer buf; /* The text contained in this surface */
-    WINDOW* win;       /* The window that contains this surface */
-    struct cursor cur; /* The cursor position within the surface */
-    int first_line;    /* Which line number is visible at the top of the surface (scroll) */
+    struct buffer buf;    /* The text contained in this surface */
+    WINDOW* win;          /* The window that contains this surface */
+    struct cursor cur;    /* The cursor position within the surface */
+    int first_line;       /* Which line number is visible at the top of the surface (scroll) */
+    struct selection sel; /* Selection info */
 };
 
 static struct surface g_active_surf = { 0 };
@@ -58,8 +68,9 @@ static void setup() {
         init_pair(i, i, COLOR_BLACK);
     }
 
-    init_color(SURFACE_BORDER_COLOR_INDEX, 200, 200, 1000);
-    init_color(SURFACE_TEXT_COLOR_INDEX, 1000, 1000, 1000);
+    init_color(SURFACE_BORDER_CIDX, 200, 200, 1000);
+    init_color(SURFACE_TEXT_CIDX, 1000, 1000, 1000);
+    init_pair(SURFACE_TEXT_SELECTED_CIDX, COLOR_BLACK, SURFACE_TEXT_CIDX);
 }
 
 void buffer_init(struct buffer* buf) {
@@ -183,6 +194,9 @@ void surface_init(struct surface* surf) {
     /* Init cursor */
     surf->cur.col = 0;
     surf->cur.line = 0;
+
+    surf->first_line = 0;
+    surf->sel.enabled = false;
 }
 
 int surface_get_line_count(struct surface* surf) { return getmaxy(surf->win) - SURF_PAD - SURF_PAD; }
@@ -190,18 +204,65 @@ int surface_get_line_count(struct surface* surf) { return getmaxy(surf->win) - S
 void surface_repaint(struct surface* surf) {
     werase(surf->win);
 
-    wattron(surf->win, COLOR_PAIR(1));
+    wattron(surf->win, COLOR_PAIR(SURFACE_BORDER_CIDX));
     box(surf->win, 0, 0);
 
     /* Render lines */
     int line_ct = surface_get_line_count(surf);
     int first_line = surf->first_line;
     for (int i = 0; i < line_ct; i++) {
-        wattron(surf->win, COLOR_PAIR(2));
-        mvwaddstr(surf->win, i + SURF_PAD, SURF_PAD, buffer_get_line(&surf->buf, first_line + i));
+        int line_idx = first_line + i;
+        char* current_line = buffer_get_line(&surf->buf, line_idx);
+
+        wattron(surf->win, COLOR_PAIR(SURFACE_TEXT_CIDX));
+        mvwaddstr(surf->win, i + SURF_PAD, SURF_PAD, current_line);
+
+        /* Draw selection for this line */
+        if (surf->sel.enabled) {
+            int start_line = MIN(surf->sel.start_line, surf->sel.end_line);
+            int end_line = MAX(surf->sel.start_line, surf->sel.end_line);
+
+            if (line_idx == start_line) {
+                int start_col, end_col;
+                if (line_idx == end_line) {
+                    /* Single-line selection */
+                    start_col = MIN(surf->sel.start_col, surf->sel.end_col);
+                    end_col = MAX(surf->sel.start_col, surf->sel.end_col);
+                } else {
+                    /* Beginning of multi-line selection */
+                    start_col = surf->sel.start_col;
+                    end_col = MAX_LINE_LENGTH;
+                }
+
+                char substr[MAX_LINE_LENGTH] = { 0 };
+                int selection_length = end_col - start_col;
+                memcpy(substr, current_line + start_col, selection_length);
+
+                wattron(surf->win, COLOR_PAIR(SURFACE_TEXT_SELECTED_CIDX));
+                mvwaddstr(surf->win, i + SURF_PAD, SURF_PAD + start_col, substr);
+            }
+
+            else if (line_idx > start_line && line_idx < end_line) {
+                /* Whole line selected (in the middle of a selection) */
+                wattron(surf->win, COLOR_PAIR(SURFACE_TEXT_SELECTED_CIDX));
+                mvwaddstr(surf->win, i + SURF_PAD, SURF_PAD, current_line);
+            }
+
+            else if (line_idx == end_line) {
+                /* End of a multi-line selection */
+                int end_col = surf->sel.end_col;
+
+                char substr[MAX_LINE_LENGTH] = { 0 };
+                int selection_length = end_col;
+                memcpy(substr, current_line, selection_length);
+
+                wattron(surf->win, COLOR_PAIR(SURFACE_TEXT_SELECTED_CIDX));
+                mvwaddstr(surf->win, i + SURF_PAD, SURF_PAD, substr);
+            }
+        }
     }
+
     wrefresh(surf->win);
-    mvwprintw(surf->win, 0, getmaxx(surf->win) - 10, "%d", surface_get_line_count(surf));
 }
 
 void surface_validate_state(struct surface* surf) {
@@ -278,7 +339,7 @@ void move_right() {
 /* Type a character into the current surface. */
 void replace_char(char c) {
     buffer_set_char(&g_active_surf.buf, g_active_surf.cur.line, g_active_surf.cur.col, c);
-    
+
     move_right();
 }
 
@@ -297,11 +358,75 @@ void backspace() {
         return;
     }
     char* current_line = buffer_get_line(&g_active_surf.buf, g_active_surf.cur.line);
-    
+
     char* cursor = current_line + g_active_surf.cur.col;
     memcpy(cursor - 1, cursor, MAX_LINE_LENGTH - g_active_surf.cur.col - 1);
-    
+
     move_left();
+}
+
+void clear_selection() { g_active_surf.sel.enabled = false; }
+
+void reset_selection() {
+    g_active_surf.sel.start_line = g_active_surf.cur.line;
+    g_active_surf.sel.end_line = g_active_surf.cur.line;
+    g_active_surf.sel.start_col = g_active_surf.cur.col;
+    g_active_surf.sel.end_col = g_active_surf.cur.col;
+}
+
+void validate_selection() {
+    struct buffer* buf = &g_active_surf.buf;
+    int line_ct = buffer_count_lines(buf);
+    g_active_surf.sel.start_line = CLAMP(g_active_surf.sel.start_line, 0, line_ct);
+    g_active_surf.sel.end_line = CLAMP(g_active_surf.sel.end_line, 0, line_ct);
+
+    int start_len = strlen(buffer_get_line(buf, g_active_surf.sel.start_line));
+    g_active_surf.sel.start_col = CLAMP(g_active_surf.sel.start_col, 0, start_len);
+    int end_len = strlen(buffer_get_line(buf, g_active_surf.sel.end_line));
+    g_active_surf.sel.end_col = CLAMP(g_active_surf.sel.end_col, 0, end_len);
+}
+
+void select_right() {
+    if (!g_active_surf.sel.enabled) {
+        g_active_surf.sel.enabled = true;
+
+        reset_selection();
+    }
+
+    g_active_surf.sel.end_col++;
+}
+
+void select_left() {
+    if (!g_active_surf.sel.enabled) {
+        g_active_surf.sel.enabled = true;
+
+        reset_selection();
+    }
+
+    g_active_surf.sel.end_col--;
+}
+
+void select_down() {
+    if (!g_active_surf.sel.enabled) {
+        g_active_surf.sel.enabled = true;
+
+        reset_selection();
+    }
+
+    g_active_surf.sel.end_line++;
+    validate_selection();
+
+}
+
+void select_up() {
+    if (!g_active_surf.sel.enabled) {
+        g_active_surf.sel.enabled = true;
+
+        reset_selection();
+    }
+
+    g_active_surf.sel.end_line--;
+    validate_selection();
 }
 
 struct ge_args {
@@ -359,15 +484,37 @@ int main(int argc, char* argv[]) {
         int c = wgetch(g_active_surf.win); /* refresh, accept single keystroke of input */
         if (isprint(c)) {
             insert_char(c);
-        } else if (c == KEY_DOWN) {
+        }
+
+        else if (c == KEY_DOWN) {
             move_down();
+            clear_selection();
         } else if (c == KEY_UP) {
             move_up();
+            clear_selection();
         } else if (c == KEY_LEFT) {
             move_left();
+            clear_selection();
         } else if (c == KEY_RIGHT) {
             move_right();
-        } else if (c == 0177) {
+            clear_selection();
+        }
+
+        else if (c == KEY_SRIGHT) {
+            select_right();
+            move_right();
+        } else if (c == KEY_SLEFT) {
+            select_left();
+            move_left();
+        } else if (c == 0520) { /* shift+down */
+            select_down();
+            move_down();
+        } else if (c == 0521) { /* shift+up */
+            select_up();
+            move_up();
+        }
+
+        else if (c == 0177) { /* backspace */
             backspace();
         }
         error_line_printf("%o", c);
