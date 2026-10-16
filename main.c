@@ -57,26 +57,6 @@ static struct surface g_active_surf = { 0 };
 static char g_error_line[MAX_ERROR_LINE_LENGTH] = { 0 };
 static WINDOW* g_error_line_win = NULL;
 
-static void setup() {
-    initscr();            /* initialize the curses library */
-    noecho();             /* Don't echo characters */
-    cbreak();             /* Pass input immediately */
-    keypad(stdscr, true); /* Enable all keys */
-    nonl();               /* Suppress newline */
-
-    start_color();
-
-    for (int i = 0; i < 256; i++) {
-        init_pair(i, i, COLOR_BLACK);
-    }
-
-    /* 0-1000 is the dumbest way to represent colors ever */
-    init_color(SURFACE_BORDER_CIDX, 200, 200, 1000);
-    init_color(SURFACE_TEXT_CIDX, 1000, 1000, 1000);
-    init_color(SURFACE_LINE_NUMBER_CIDX, 500, 500, 500);
-    init_pair(SURFACE_TEXT_SELECTED_CIDX, COLOR_BLACK, SURFACE_TEXT_CIDX);
-}
-
 void buffer_init(struct buffer* buf) {
     buf->head = calloc(1, sizeof(struct buffer_node));
     buf->head->next = NULL;
@@ -170,21 +150,36 @@ void buffer_from_file(struct buffer* buf, FILE* file) {
     do {
         c = fgetc(file);
 
+        if (c != EOF) {
+            *line_ptr = c;
+            line_ptr++;
+        }
+
         if (c == '\n' || c == EOF) {
             struct buffer_node* new_line = buffer_add_line(buf);
 
             memcpy(new_line->text, line, MAX_LINE_LENGTH);
             line_ptr = line;
             memset(line, 0, MAX_LINE_LENGTH);
-        } else {
-            *line_ptr = c;
-            line_ptr++;
         }
     } while (c != EOF);
 
     /* Add last line */
     struct buffer_node* new_line = buffer_add_line(buf);
     memcpy(new_line->text, line, MAX_LINE_LENGTH);
+}
+
+void buffer_to_file(struct buffer* buf, FILE* file) {
+    struct buffer_node* node = buf->head;
+    while (node != NULL) {
+        const char* c = node->text;
+        while (*c != '\0') {
+            fwrite(c, sizeof(char), 1, file);
+            c++; /* Begone! */
+        }
+
+        node = node->next;
+    }
 }
 
 void surface_init(struct surface* surf) {
@@ -441,8 +436,27 @@ void select_to_cursor() {
     validate_selection(&g_active_surf);
 }
 
-void print_active_surface_info() {
-    error_line_printf("%d lines", buffer_count_lines(&g_active_surf.buf));
+void print_active_surface_info() { error_line_printf("%d lines", buffer_count_lines(&g_active_surf.buf)); }
+
+static void setup() {
+    initscr();            /* initialize the curses library */
+    noecho();             /* Don't echo characters */
+    cbreak();             /* Pass input immediately */
+    keypad(stdscr, true); /* Enable all keys */
+    nonl();               /* Suppress newline */
+    raw();
+
+    start_color();
+
+    for (int i = 0; i < 256; i++) {
+        init_pair(i, i, COLOR_BLACK);
+    }
+
+    /* 0-1000 is the dumbest way to represent colors ever */
+    init_color(SURFACE_BORDER_CIDX, 200, 200, 1000);
+    init_color(SURFACE_TEXT_CIDX, 1000, 1000, 1000);
+    init_color(SURFACE_LINE_NUMBER_CIDX, 500, 500, 500);
+    init_pair(SURFACE_TEXT_SELECTED_CIDX, COLOR_BLACK, SURFACE_TEXT_CIDX);
 }
 
 struct ge_args {
@@ -486,6 +500,7 @@ int main(int argc, char* argv[]) {
         error_line_printf("Read from %s.", args.filename);
         buffer_from_file(&g_active_surf.buf, file);
     }
+    fclose(file);
 
     for (;;) {
         surface_repaint(&g_active_surf);
@@ -498,6 +513,8 @@ int main(int argc, char* argv[]) {
         wmove(g_active_surf.win, line, col);
 
         int c = wgetch(g_active_surf.win); /* refresh, accept single keystroke of input */
+        error_line_printf("%o", c);
+
         if (isprint(c)) {
             insert_char(c);
         }
@@ -536,8 +553,7 @@ int main(int argc, char* argv[]) {
 
         else if (c == KEY_PPAGE) {
             page_up();
-        }
-        else if (c == KEY_NPAGE) {
+        } else if (c == KEY_NPAGE) {
             page_down();
         }
 
@@ -548,7 +564,21 @@ int main(int argc, char* argv[]) {
         else if (c == 0177 || c == KEY_BACKSPACE) { /* backspace */
             backspace();
         }
-        // error_line_printf("%o", c);
+
+        else if (c == CTRL('s')) {
+            FILE* file = fopen(args.filename, "w");
+            if (!file) {
+                error_line_printf("Failed to write to %s!", args.filename);
+            } else {
+                buffer_to_file(&g_active_surf.buf, file);
+                error_line_printf("Wrote to %s.", args.filename);
+            }
+            fclose(file);
+        }
+
+        else if (c == CTRL('c')) {
+            break;
+        }
     }
 
     return 0;
