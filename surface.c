@@ -33,7 +33,7 @@ int surface_get_current_line_length(struct surface* surf) {
     const char* line = buffer_get_line(&surf->buf, surf->cur.line);
     if (line == NULL) return 0;
 
-    return strlen(line);
+    return strnlen(line, BUFFER_MAX_LINE_LENGTH);
 }
 
 int surface_get_line_number_digit_count(struct surface* surf) {
@@ -203,7 +203,7 @@ void surface_repaint(struct surface* surf) {
             mvwaddstr(surf->win, info.screen_line_idx + SURFACE_PAD,
                       SURFACE_PAD + info.linenum_digit_ct + 1 + start_col, line);
         }
-        error_line_printf("%d:%d", surf->cur.line, surf->cur.col);
+        // error_line_printf("%d:%d", surf->cur.line, surf->cur.col);
 
         /* Draw selection for this line */
         if (surf->sel.enabled) {

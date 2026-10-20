@@ -38,7 +38,7 @@ void setup_terminal() {
     init_color(SURFACE_TEXT_CIDX, RGB_TO_1K(189, 183, 107));
     init_color(SURFACE_LINE_NUMBER_CIDX, 500, 500, 500);
     init_color(SURFACE_KEYWORD_CIDX, RGB_TO_1K(9, 237, 249));
-    init_color(SURFACE_COMMENT_CIDX, RGB_TO_1K(249, 64, 27));
+    init_color(SURFACE_COMMENT_CIDX, RGB_TO_1K(0, 158, 206));
     init_color(SURFACE_ERROR_CIDX, 1000, 200, 200);
     init_color(SURFACE_PUNCTUATION_CIDX, 1000, 1000, 1000);
     init_color(SURFACE_NUMBER_CIDX, RGB_TO_1K(117, 249, 9));
@@ -119,6 +119,9 @@ bool handle_key(struct ge_args args, int key) {
     else if (key == 0177 || key == KEY_BACKSPACE) { /* backspace */
         backspace();
     }
+    else if (key == KEY_ENTER || key == '\r') {
+        insert_newline();
+    }
 
     else if (key == CTRL('s')) {
         FILE* file = fopen(args.filename, "w");
@@ -177,7 +180,7 @@ int main(int argc, char* argv[]) {
 
         /* Await keypress */
         int key = wgetch(g_active_surf.win); /* refresh, accept single keystroke of input */
-        // error_line_printf("%o", c);
+        error_line_printf("%o", key);
 
         /* Handle the keypress */
         bool wants_quit = handle_key(args, key);

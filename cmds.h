@@ -14,5 +14,6 @@ void try_start_selection();
 void select_to_cursor();
 void print_active_surface_info();
 void clear_selection();
+void insert_newline();
 
 #endif  // CMDS_H

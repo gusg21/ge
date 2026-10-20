@@ -17,6 +17,7 @@ struct buffer {
 void buffer_init(struct buffer* buf);
 int buffer_count_lines(struct buffer* buf);
 char* buffer_get_line(struct buffer* buf, int line);
+struct buffer_node* buffer_get_node(struct buffer* buf, int line);
 void buffer_set_char(struct buffer* buf, int line, int col, char c);
 struct buffer_node* buffer_find_tail(struct buffer* buf);
 struct buffer_node* buffer_add_line(struct buffer* buf);

@@ -1,9 +1,10 @@
 #include "cmds.h"
 
+#include <stdlib.h>
 #include <string.h>
 
-#include "surface.h"
 #include "error_line.h"
+#include "surface.h"
 
 void move_up() {
     g_active_surf.cur.line--;
@@ -86,17 +87,31 @@ void insert_char(char c) {
 }
 
 void backspace() {
-    // surface_clamp_cursor_to_line(&g_active_surf);
+    struct buffer_node* cur_line_node = buffer_get_node(&g_active_surf.buf, g_active_surf.cur.line);
+    char* current_line = cur_line_node->text;
 
     if (g_active_surf.cur.col == 0) {
-        return;
+        struct buffer_node* last_node = buffer_get_node(&g_active_surf.buf, g_active_surf.cur.line - 1);
+        last_node->next = cur_line_node->next; /* Remove the current line from the list */
+
+        int last_line_len = strnlen(last_node->text, BUFFER_MAX_LINE_LENGTH);
+        int cur_line_len = strnlen(current_line, BUFFER_MAX_LINE_LENGTH);
+        memcpy(last_node->text + last_line_len - 1, cur_line_node->text, cur_line_len);
+
+        free(cur_line_node);
+
+        g_active_surf.cur.line--;
+        g_active_surf.cur.col = last_line_len - 1;
     }
-    char* current_line = buffer_get_line(&g_active_surf.buf, g_active_surf.cur.line);
+    else {
+        cur_line_node = buffer_get_node(&g_active_surf.buf, g_active_surf.cur.line);
+        current_line = cur_line_node->text;
+        char* cursor = current_line + g_active_surf.cur.col;
+        memcpy(cursor - 1, cursor, BUFFER_MAX_LINE_LENGTH - g_active_surf.cur.col - 1);
 
-    char* cursor = current_line + g_active_surf.cur.col;
-    memcpy(cursor - 1, cursor, BUFFER_MAX_LINE_LENGTH - g_active_surf.cur.col - 1);
+        g_active_surf.cur.col--;
+    }
 
-    g_active_surf.cur.col--;
     surface_clamp_cursor_to_line(&g_active_surf);
 }
 
@@ -118,3 +133,24 @@ void select_to_cursor() {
 void print_active_surface_info() { error_line_printf("%d lines", buffer_count_lines(&g_active_surf.buf)); }
 
 void clear_selection() { g_active_surf.sel.enabled = false; }
+
+void insert_newline() {
+    struct buffer_node* cur_line_node = buffer_get_node(&g_active_surf.buf, g_active_surf.cur.line);
+    struct buffer_node* next_node = cur_line_node->next;
+    struct buffer_node* new_line_node = calloc(1, sizeof(struct buffer_node));
+
+    // new_line_node->text[0] = '\n';
+    int line_len = strnlen(cur_line_node->text, BUFFER_MAX_LINE_LENGTH);
+    int new_line_len = line_len - g_active_surf.cur.col;
+    char* cursor = cur_line_node->text + g_active_surf.cur.col;
+    memcpy(new_line_node->text, cursor, new_line_len);
+    memset(cursor, 0, new_line_len);
+    *cursor = '\n';
+
+    /* Insert new line node into list */
+    cur_line_node->next = new_line_node;
+    new_line_node->next = next_node;
+
+    g_active_surf.cur.line++;
+    g_active_surf.cur.col = 0;
+}

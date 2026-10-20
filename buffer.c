@@ -22,11 +22,16 @@ int buffer_count_lines(struct buffer* buf) {
 
 /* Line is 0-indexed */
 char* buffer_get_line(struct buffer* buf, int line) {
+    return buffer_get_node(buf, line)->text;
+}
+
+/* Line is 0-indexed */
+struct buffer_node* buffer_get_node(struct buffer* buf, int line) {
     struct buffer_node* node = buf->head;
     int cur_line = 0;
     do {
         if (cur_line == line) {
-            return node->text;
+            return node;
         }
         node = node->next;
         cur_line++;

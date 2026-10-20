@@ -26,7 +26,9 @@ static struct hl_str HL_TYPES[] = {
     { "signed", 6 },  { "extern", 6 },   { "enum", 4 },     { "register", 8 }, { "volatile", 8 },
 };
 static struct hl_str HL_VALUES[] = {
-    { "NULL", 4 }, { "true", 4 }, { "false", 5 },
+    { "NULL", 4 },
+    { "true", 4 },
+    { "false", 5 },
 };
 char HL_PUNCTUATIONS[] = { '{', '}', '[', ']', '(', ')', '.' };
 char HL_OPERATORS[] = { '+', '-', '*', '/', '=', '<', '>', '&', '~', '|', '!' };
@@ -127,10 +129,25 @@ void hilite(struct hl_result* result, const char* text) {
 
             char delim = c;
             ADVANCE();
-            while (c != delim) {
+            while (true) {
                 ADVANCE();
+                if (c == delim) { /* Ignore escaped delimiters */
+                    if (ptr[-1] == '\\') {
+                        if (ptr[-2] != '\\') {
+                        } else {
+                            ADVANCE();
+
+                            break;
+                        }
+                    } else {
+                        ADVANCE();
+                        break;
+                    }
+                }
+                if (c == '\n') {
+                    break;
+                }
             }
-            ADVANCE();
 
             result->ranges[result->count].start_col = start_col;
             result->ranges[result->count].end_col = col;
@@ -169,7 +186,7 @@ void hilite(struct hl_result* result, const char* text) {
         }
         if (found_type) continue;
 
-		/* Value */
+        /* Value */
         bool found_val = false;
         for (size_t val_idx = 0; val_idx < ARR_LEN(HL_VALUES); val_idx++) {
             const char* val = HL_VALUES[val_idx].name;
