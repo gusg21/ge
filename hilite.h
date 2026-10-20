@@ -3,17 +3,23 @@
 
 #include <stddef.h>
 
-#define HL_MAX_RANGES 2048
+#define HL_MAX_RANGES 2 << 12
 
 enum hl_kind {
     HL_KEYWORD,
     HL_COMMENT,
+    HL_NUMBER,
+    HL_PUNCTUATION,
+    HL_OPERATOR,
+    HL_DIRECTIVE,
+    HL_STRING
 };
 
 struct hl_range {
     int start_col;
     int end_col;
-    int line;
+    int start_line;
+    int end_line;
     enum hl_kind kind;
 };
 

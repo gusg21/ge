@@ -51,18 +51,18 @@ void page_down() {
     surface_validate_line(&g_active_surf);
 }
 
-/* Type a character into the current surface. */
 void replace_char(char c) {
     buffer_set_char(&g_active_surf.buf, g_active_surf.cur.line, g_active_surf.cur.col, c);
 
     move_right();
 }
 
+/* Type a character into the current surface. */
 void insert_char(char c) {
     char* current_line = buffer_get_line(&g_active_surf.buf, g_active_surf.cur.line);
 
     char* cursor = current_line + g_active_surf.cur.col;
-    memcpy(cursor + 1, cursor, MAX_LINE_LENGTH - g_active_surf.cur.col - 1);
+    memcpy(cursor + 1, cursor, BUFFER_MAX_LINE_LENGTH - g_active_surf.cur.col - 1);
     *cursor = c;
 
     move_right();
@@ -75,7 +75,7 @@ void backspace() {
     char* current_line = buffer_get_line(&g_active_surf.buf, g_active_surf.cur.line);
 
     char* cursor = current_line + g_active_surf.cur.col;
-    memcpy(cursor - 1, cursor, MAX_LINE_LENGTH - g_active_surf.cur.col - 1);
+    memcpy(cursor - 1, cursor, BUFFER_MAX_LINE_LENGTH - g_active_surf.cur.col - 1);
 
     move_left();
 }

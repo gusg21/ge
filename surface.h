@@ -7,7 +7,7 @@
 #include "buffer.h"
 #include "hilite.h"
 
-#define SURF_PAD 1
+#define SURFACE_PAD 1
 
 struct cursor {
     int col;

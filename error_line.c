@@ -4,13 +4,13 @@
 
 #include "defs.h"
 
-char g_error_line[MAX_ERROR_LINE_LENGTH];
+char g_error_line[ERROR_LINE_MAX_LENGTH];
 WINDOW* g_error_line_win;
 
 void error_line_init() {
     /* Clear + fill error line text */
-    memset(g_error_line, 0, MAX_ERROR_LINE_LENGTH);
-    memcpy(g_error_line, INITIAL_ERROR_LINE_TEXT, sizeof(INITIAL_ERROR_LINE_TEXT));
+    memset(g_error_line, 0, ERROR_LINE_MAX_LENGTH);
+    memcpy(g_error_line, ERROR_LINE_INITIAL_TEXT, sizeof(ERROR_LINE_INITIAL_TEXT));
 
     /* Place window for error line */
     int maxx = getmaxx(stdscr);

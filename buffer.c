@@ -87,7 +87,7 @@ void buffer_from_memory(struct buffer* buf, const char* text) {
 void buffer_from_file(struct buffer* buf, FILE* file) {
     char c;
 
-    char line[MAX_LINE_LENGTH] = { 0 };
+    char line[BUFFER_MAX_LINE_LENGTH] = { 0 };
     char* line_ptr = line;
 
     free(buf->head);
@@ -104,15 +104,15 @@ void buffer_from_file(struct buffer* buf, FILE* file) {
         if (c == '\n' || c == EOF) {
             struct buffer_node* new_line = buffer_add_line(buf);
 
-            memcpy(new_line->text, line, MAX_LINE_LENGTH);
+            memcpy(new_line->text, line, BUFFER_MAX_LINE_LENGTH);
             line_ptr = line;
-            memset(line, 0, MAX_LINE_LENGTH);
+            memset(line, 0, BUFFER_MAX_LINE_LENGTH);
         }
     } while (c != EOF);
 
     /* Add last line */
     struct buffer_node* new_line = buffer_add_line(buf);
-    memcpy(new_line->text, line, MAX_LINE_LENGTH);
+    memcpy(new_line->text, line, BUFFER_MAX_LINE_LENGTH);
 }
 
 void buffer_to_file(struct buffer* buf, FILE* file) {
@@ -132,11 +132,11 @@ void buffer_to_file(struct buffer* buf, FILE* file) {
 char* buffer_to_string(struct buffer* buf) {
     struct buffer_node* node = buf->head;
     int line_ct = buffer_count_lines(buf);
-    char* string = calloc(MAX_LINE_LENGTH * line_ct, sizeof(char)); /* Apparently allowed! Neat! */
+    char* string = calloc(BUFFER_MAX_LINE_LENGTH * line_ct, sizeof(char)); /* Apparently allowed! Neat! */
     size_t string_size = 0;
     char* string_end = string;
     while (node != NULL) {
-        size_t line_len = strnlen(node->text, MAX_LINE_LENGTH);
+        size_t line_len = strnlen(node->text, BUFFER_MAX_LINE_LENGTH);
         string_size += line_len;
         memcpy(string_end, node->text, line_len);
         string_end += line_len;

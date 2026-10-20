@@ -11,27 +11,40 @@
 #include "hilite.h"
 #include "surface.h"
 
+#define RGB_TO_1K(r,g,b) (r / 255.0) * 1000.0, (g / 255.0) * 1000.0, (b / 255.0) * 1000.0
+
+/**
+ * @brief Set the up terminal object
+ * Example multiline comment
+ */
+
 void setup_terminal() {
+    /* Setup reasonable terminal environment */
     initscr();            /* initialize the curses library */
     noecho();             /* Don't echo characters */
     cbreak();             /* Pass input immediately */
     keypad(stdscr, true); /* Enable all keys */
     nonl();               /* Suppress newline */
-    raw();
+    raw();                /* Allow us to handle CTRL+c and CTRL+s, etc. */
 
+    /* Initialize colors */
     start_color();
-
     for (int i = 0; i < 256; i++) {
         init_pair(i, i, COLOR_BLACK);
     }
 
     /* 0-1000 is the dumbest way to represent colors ever */
     init_color(SURFACE_BORDER_CIDX, 200, 200, 1000);
-    init_color(SURFACE_TEXT_CIDX, 1000, 1000, 1000);
+    init_color(SURFACE_TEXT_CIDX, RGB_TO_1K(189, 183, 107));
     init_color(SURFACE_LINE_NUMBER_CIDX, 500, 500, 500);
-    init_color(SURFACE_KEYWORD_CIDX, 500, 500, 1000);
-    init_color(SURFACE_COMMENT_CIDX, 500, 1000, 500);
+    init_color(SURFACE_KEYWORD_CIDX, RGB_TO_1K(9, 237, 249));
+    init_color(SURFACE_COMMENT_CIDX, RGB_TO_1K(249, 9, 117));
     init_color(SURFACE_ERROR_CIDX, 1000, 200, 200);
+    init_color(SURFACE_PUNCTUATION_CIDX, 1000, 1000, 1000);
+    init_color(SURFACE_NUMBER_CIDX, RGB_TO_1K(117, 249, 9));
+    init_color(SURFACE_OPERATOR_CIDX, RGB_TO_1K(237, 255, 47));
+    init_color(SURFACE_DIRECTIVE_CIDX, RGB_TO_1K(105, 89, 237));
+    init_color(SURFACE_STRING_CIDX, RGB_TO_1K(117, 249, 9));
 
     init_pair(SURFACE_TEXT_SELECTED_CIDX, COLOR_BLACK, SURFACE_TEXT_CIDX);
 }
@@ -151,17 +164,20 @@ int main(int argc, char* argv[]) {
     }
 
     for (;;) {
+        /* Repaint */
         surface_repaint(&g_active_surf);
-
         error_line_repaint();
 
+        /* Move cursor */
         int line, col;
         surface_get_cursor_display_pos(&g_active_surf, &line, &col);
         wmove(g_active_surf.win, line, col);
 
+        /* Await keypress */
         int key = wgetch(g_active_surf.win); /* refresh, accept single keystroke of input */
         // error_line_printf("%o", c);
 
+        /* Handle the keypress */
         bool wants_quit = handle_key(args, key);
         if (wants_quit) break;
     }

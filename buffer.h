@@ -3,10 +3,10 @@
 
 #include <stdio.h>
 
-#define MAX_LINE_LENGTH 1024
+#define BUFFER_MAX_LINE_LENGTH 1024
 
 struct buffer_node {
-    char text[MAX_LINE_LENGTH];
+    char text[BUFFER_MAX_LINE_LENGTH];
     struct buffer_node* next;
 };
 
