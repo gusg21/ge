@@ -12,7 +12,9 @@ enum hl_kind {
     HL_PUNCTUATION,
     HL_OPERATOR,
     HL_DIRECTIVE,
-    HL_STRING
+    HL_STRING,
+    HL_TYPE,
+    HL_VALUE, /* NULL, false, true, etc */
 };
 
 struct hl_range {

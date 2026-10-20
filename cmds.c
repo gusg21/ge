@@ -22,13 +22,30 @@ void move_down() {
 }
 
 void move_left() {
+    surface_clamp_cursor_to_line(&g_active_surf);
     g_active_surf.cur.col--;
+
+    if (g_active_surf.cur.col < 0 && g_active_surf.cur.line > 0) {
+        g_active_surf.cur.line--;
+        int line_len = surface_get_current_line_length(&g_active_surf);
+        g_active_surf.cur.col = line_len - 1; /* Ignore the new line */
+    }
+
     surface_validate_line(&g_active_surf);
     surface_clamp_cursor_to_line(&g_active_surf);
 }
 
 void move_right() {
+    surface_clamp_cursor_to_line(&g_active_surf);
     g_active_surf.cur.col++;
+
+    int line_len = surface_get_current_line_length(&g_active_surf);
+    int line_ct = buffer_count_lines(&g_active_surf.buf);
+    if (g_active_surf.cur.col > line_len - 1 && g_active_surf.cur.line < line_ct - 1) {
+        g_active_surf.cur.col = 0;
+        g_active_surf.cur.line++;
+    }
+
     surface_validate_line(&g_active_surf);
     surface_clamp_cursor_to_line(&g_active_surf);
 }
@@ -69,6 +86,8 @@ void insert_char(char c) {
 }
 
 void backspace() {
+    // surface_clamp_cursor_to_line(&g_active_surf);
+
     if (g_active_surf.cur.col == 0) {
         return;
     }
@@ -77,7 +96,8 @@ void backspace() {
     char* cursor = current_line + g_active_surf.cur.col;
     memcpy(cursor - 1, cursor, BUFFER_MAX_LINE_LENGTH - g_active_surf.cur.col - 1);
 
-    move_left();
+    g_active_surf.cur.col--;
+    surface_clamp_cursor_to_line(&g_active_surf);
 }
 
 void try_start_selection() {

@@ -40,6 +40,7 @@ extern struct surface g_active_surf;
 
 void surface_init(struct surface* surf);
 int surface_get_displayed_line_count(struct surface* surf);
+int surface_get_current_line_length(struct surface* surf);
 int surface_get_line_number_digit_count(struct surface* surf);
 void surface_repaint_line_simple(struct surface* surf, struct repaint_line_info info);
 void surface_repaint_line_selection(struct surface* surf, struct repaint_line_info info);

@@ -29,6 +29,13 @@ void surface_init(struct surface* surf) {
 
 int surface_get_displayed_line_count(struct surface* surf) { return getmaxy(surf->win) - SURFACE_PAD - SURFACE_PAD; }
 
+int surface_get_current_line_length(struct surface* surf) {
+    const char* line = buffer_get_line(&surf->buf, surf->cur.line);
+    if (line == NULL) return 0;
+
+    return strlen(line);
+}
+
 int surface_get_line_number_digit_count(struct surface* surf) {
     int line_ct = buffer_count_lines(&surf->buf);
     return log10l(line_ct) + 1;
@@ -121,6 +128,12 @@ int surface_get_hilite_color(enum hl_kind kind) {
 
         case HL_STRING:
             return SURFACE_STRING_CIDX;
+        
+        case HL_TYPE:
+            return SURFACE_TYPE_CIDX;
+
+        case HL_VALUE:
+            return SURFACE_VALUE_CIDX;
 
         default:
             return SURFACE_ERROR_CIDX;
